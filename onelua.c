@@ -108,6 +108,9 @@
 #include "ltablib.c"
 #include "lutf8lib.c"
 #include "linit.c"
+#ifdef __rtems__
+#include "lrtemslib.c"
+#endif
 #endif
 
 /* lua */

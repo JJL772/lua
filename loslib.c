@@ -9,6 +9,10 @@
 
 #include "lprefix.h"
 
+#ifdef __rtems__
+#include <rtems.h>
+#include <rtems/version.h>
+#endif
 
 #include <errno.h>
 #include <locale.h>
@@ -392,7 +396,7 @@ static int os_setlocale (lua_State *L) {
   return 1;
 }
 
-
+#ifndef __rtems__
 static int os_exit (lua_State *L) {
   int status;
   if (lua_isboolean(L, 1))
@@ -404,6 +408,64 @@ static int os_exit (lua_State *L) {
   if (L) exit(status);  /* 'if' to avoid warnings for unreachable 'return' */
   return 0;
 }
+#endif
+
+/* }====================================================== */
+
+/* RTEMS VERSIONING */
+#ifdef __rtems__
+
+static void os_rtems_init(lua_State* L) {
+  lua_pushinteger(L, __RTEMS_MAJOR__);
+  lua_setglobal(L, "RTEMS_MAJOR");
+  lua_pushinteger(L, __RTEMS_MINOR__);
+  lua_setglobal(L, "RTEMS_MINOR");
+  lua_pushinteger(L, __RTEMS_REVISION__);
+  lua_setglobal(L, "RTEMS_REVISION");
+  lua_pushinteger(L,
+      (__RTEMS_MAJOR__ << 16)     & 0xFF0000
+    | (__RTEMS_MINOR__ << 8)      & 0xFF00
+    | (__RTEMS_REVISION__)        & 0xFF);
+  lua_setglobal(L, "RTEMS_VERSION");
+}
+
+static int os_rtems_make_version(lua_State *L) {
+  int a, b, c;
+  lua_Integer maj = lua_tointegerx(L, 1, &a);
+  lua_Integer min = lua_tointegerx(L, 2, &b);
+  lua_Integer rev = lua_tointegerx(L, 3, &c);
+  if (!a || !b || !c)
+    return luaL_error(L, "Parameter was not an integer\n");
+  
+  lua_Integer r = 
+    ((maj << 16)      & 0xFF0000)
+    | ((min << 8)     & 0xFF00)
+    | ((rev)          & 0xFF);
+  lua_pushinteger(L, r);
+  return 1;
+}
+
+static int os_rtems_version_int(lua_State *L) {
+  lua_Integer version = 
+    ((__RTEMS_MAJOR__ << 16)    & 0xFF0000)
+    | ((__RTEMS_MINOR__ << 8)   & 0xFF00)
+    | ((__RTEMS_REVISION__)     & 0xFF);
+  lua_pushinteger(L, version);
+  return 1;
+}
+
+static int os_rtems_version(lua_State *L) {
+  lua_pushstring(L, rtems_get_version_string());
+  return 1;
+}
+
+static int os_rtems_reset(lua_State *L) {
+  exit(1);
+}
+
+#endif
+
+/* }====================================================== */
 
 
 static const luaL_Reg syslib[] = {
@@ -411,13 +473,21 @@ static const luaL_Reg syslib[] = {
   {"date",      os_date},
   {"difftime",  os_difftime},
   {"execute",   os_execute},
+#ifndef __rtems__
   {"exit",      os_exit},
+#endif
   {"getenv",    os_getenv},
   {"remove",    os_remove},
   {"rename",    os_rename},
   {"setlocale", os_setlocale},
   {"time",      os_time},
   {"tmpname",   os_tmpname},
+#ifdef __rtems__
+  {"version_int",     os_rtems_version_int},
+  {"version",         os_rtems_version},
+  {"make_version",    os_rtems_make_version},
+  {"shutdown",        os_rtems_reset},
+#endif
   {NULL, NULL}
 };
 
@@ -427,6 +497,9 @@ static const luaL_Reg syslib[] = {
 
 LUAMOD_API int luaopen_os (lua_State *L) {
   luaL_newlib(L, syslib);
+#ifdef __rtems__
+  os_rtems_init(L);
+#endif
   return 1;
 }
 

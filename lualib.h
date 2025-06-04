@@ -54,6 +54,9 @@ LUAMOD_API int (luaopen_table) (lua_State *L);
 #define LUA_UTF8LIBK	(LUA_TABLIBK << 1)
 LUAMOD_API int (luaopen_utf8) (lua_State *L);
 
+#define LUA_RTEMSLIBNAME "rtems"
+#define LUA_RTEMSLIBK (LUA_UTF8LIBK << 1)
+LUAMOD_API int (luaopen_rtems) (lua_State *L);
 
 /* open selected libraries */
 LUALIB_API void (luaL_openselectedlibs) (lua_State *L, int load, int preload);
