@@ -277,6 +277,7 @@ static int io_open (lua_State *L) {
 }
 
 
+#ifndef __rtems__
 /*
 ** function to close 'popen' files
 */
@@ -285,7 +286,6 @@ static int io_pclose (lua_State *L) {
   errno = 0;
   return luaL_execresult(L, l_pclose(L, p->f));
 }
-
 
 static int io_popen (lua_State *L) {
   const char *filename = luaL_checkstring(L, 1);
@@ -297,7 +297,7 @@ static int io_popen (lua_State *L) {
   p->closef = &io_pclose;
   return (p->f == NULL) ? luaL_fileresult(L, 0, filename) : 1;
 }
-
+#endif
 
 static int io_tmpfile (lua_State *L) {
   LStream *p = newfile(L);
@@ -758,7 +758,9 @@ static const luaL_Reg iolib[] = {
   {"lines", io_lines},
   {"open", io_open},
   {"output", io_output},
+#ifndef __rtems__
   {"popen", io_popen},
+#endif
   {"read", io_read},
   {"tmpfile", io_tmpfile},
   {"type", io_type},
