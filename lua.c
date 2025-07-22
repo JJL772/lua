@@ -22,7 +22,12 @@
 #include "llimits.h"
 
 #ifdef __rtems__
-#include <rtems/shell.h>
+#define LUA_USE_BESTLINE
+#endif
+
+#ifdef LUA_USE_BESTLINE
+#include "external/bestline.h"
+#include "external/bestline.c"
 #endif
 
 
@@ -457,86 +462,13 @@ static l_readlineT l_readline = NULL;
 typedef void (*l_addhistT) (const char *string);
 static l_addhistT l_addhist = NULL;
 
-#ifdef __rtems__
-/* Really crappy line editor. TODO: REPLACE ME! */
-static char *rtems_lua_fgets(const char* prompt, char* buff, size_t l, FILE* fp) {
-  tcdrain(fileno(fp));
-  const size_t pl = strlen(prompt);
-  char* p = buff, *end = buff + l;
-  char* hwm = p;
-  while ((p-buff) < l) {
-    int ignore = 0;
-
-    *p = fgetc(fp);
-    if (hwm < p)
-      hwm = p;
-
-    switch(*p) {
-    case 0x7F: /* DEL */
-    case 0x8:  /* BS */
-      *p = 0;  /* clear BS/DEL */
-      if (--p < buff) p = buff;
-      *p = 0; /* clear prev char */
-      ignore = 1;
-      break;
-    case 0x3: /* ETX (ctrl+C) */
-      p = buff;
-      *p = 0;
-      break;
-    case 0xA: /* LF */
-    case 0xD: /* CR */
-      break;
-    case 0x4: /* EOT */
-      *p = 0;
-      ignore = 1;
-      break;
-    case 0x9: /* HT */
-      *p = ' ';
-      break;
-    default:
-      break;
-    }
-
-    /* purge trailing chars */
-    fputc('\r', stdout);
-    if (p < hwm)
-      for (char* x = buff; x <= hwm+pl; ++x)
-        fputc(' ', stdout);
-
-    /* write out prompt + current line */
-    fputc('\r', stdout);
-    fputs(prompt, stdout);
-    for (char* x = buff; x < end && *x && x <= hwm; ++x)
-      fputc(*x, stdout);
-
-    /* check for line feed, CR or EOT */
-    if (*p == 0xA || *p == 0x4 || *p == 0xD)
-      break;
-    if (!ignore)
-      ++p;
-  }
-
-  /* Ensure terminated */
-  if ((p-buff) < l)
-    *(p++) = 0;
-  else
-    buff[l-1] = 0;
-  fputc('\n', stdout);
-  return buff;
-}
-#endif
-
 static char *lua_readline (char *buff, const char *prompt) {
   if (l_readline != NULL)  /* is there a 'readline'? */
     return (*l_readline)(prompt);  /* use it */
   else {  /* emulate 'readline' over 'buff' */
     fputs(prompt, stdout);
     fflush(stdout);  /* show prompt */
-  #ifdef __rtems__
-    return rtems_lua_fgets(prompt, buff, LUA_MAXINPUT, stdin);
-  #else
     return fgets(buff, LUA_MAXINPUT, stdin);  /* read line */
-  #endif
   }
 }
 
@@ -584,6 +516,18 @@ static void lua_initreadline (lua_State *L) {
     l_readline = cast(l_readlineT, cast_func(dlsym(lib, "readline")));
     l_addhist = cast(l_addhistT, cast_func(dlsym(lib, "add_history")));
   }
+}
+
+#elif defined(LUA_USE_BESTLINE)
+
+static void lua_bl_addhist(const char* l) {
+  bestlineHistoryAdd(l);
+}
+
+static void lua_initreadline(lua_State* L) {
+  UNUSED(L);
+  l_readline = bestline;
+  l_addhist = lua_bl_addhist;
 }
 
 #else	/* }{ */
