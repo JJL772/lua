@@ -192,6 +192,10 @@ void luaO_arith (lua_State *L, int op, const TValue *p1, const TValue *p2,
   }
 }
 
+lu_byte luaO_octavalue (int c) {
+  lua_assert(lisodigit(c));
+  return cast_byte(c - '0');
+}
 
 lu_byte luaO_hexavalue (int c) {
   lua_assert(lisxdigit(c));
@@ -346,6 +350,13 @@ static const char *l_str2int (const char *s, lua_Integer *result) {
     s += 2;  /* skip '0x' */
     for (; lisxdigit(cast_uchar(*s)); s++) {
       a = a * 16 + luaO_hexavalue(*s);
+      empty = 0;
+    }
+  }
+  else if (s[0] == '0' && (s[1] == 'o' || s[1] =='O')) {
+    s += 2; /* skip '0o' prefix */
+    for (; lisodigit(cast_uchar(*s)); s++) {
+      a = a * 8 + luaO_octavalue(*s);
       empty = 0;
     }
   }

@@ -249,10 +249,14 @@ static int read_numeral (LexState *ls, SemInfo *seminfo) {
   save_and_next(ls);
   if (first == '0' && check_next2(ls, "xX"))  /* hexadecimal? */
     expo = "Pp";
+  else if (first == '0' && check_next2(ls, "oO"))
+    expo = "";
+
   for (;;) {
     if (check_next2(ls, expo))  /* exponent mark? */
       check_next2(ls, "-+");  /* optional exponent sign */
-    else if (lisxdigit(ls->current) || ls->current == '.')  /* '%x|%.' */
+    else if (lisxdigit(ls->current) || ls->current == '.'
+        || lisodigit(ls->current))  /* '%x|%.' */
       save_and_next(ls);
     else break;
   }
@@ -341,6 +345,18 @@ static void esccheck (LexState *ls, int c, const char *msg) {
   }
 }
 
+static int getocta (LexState *ls) {
+  save_and_next(ls);
+  esccheck (ls, lisodigit(ls->current), "octal digit expected");
+  return luaO_octavalue(ls->current);
+}
+
+static int readoctaesc (LexState *ls) {
+  int r = getocta(ls);
+  r = (r << 3) + getocta(ls);
+  luaZ_buffremove(ls->buff, 2);
+  return r;
+}
 
 static int gethexa (LexState *ls) {
   save_and_next(ls);
@@ -424,6 +440,7 @@ static void read_string (LexState *ls, int del, SemInfo *seminfo) {
           case 't': c = '\t'; goto read_save;
           case 'v': c = '\v'; goto read_save;
           case 'x': c = readhexaesc(ls); goto read_save;
+          case 'o': c = readoctaesc(ls); goto read_save;
           case 'u': utf8esc(ls);  goto no_save;
           case '\n': case '\r':
             inclinenumber(ls); c = '\n'; goto only_save;

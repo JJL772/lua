@@ -41,7 +41,7 @@
 #define PRINTBIT	2
 #define SPACEBIT	3
 #define XDIGITBIT	4
-
+#define ODIGITBIT 5
 
 #define MASK(B)		(1 << (B))
 
@@ -60,7 +60,7 @@
 #define lisspace(c)	testprop(c, MASK(SPACEBIT))
 #define lisprint(c)	testprop(c, MASK(PRINTBIT))
 #define lisxdigit(c)	testprop(c, MASK(XDIGITBIT))
-
+#define lisodigit(c)  testprop(c, MASK(ODIGITBIT))
 
 /*
 ** In ASCII, this 'ltolower' is correct for alphabetic characters and
