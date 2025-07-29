@@ -12,6 +12,9 @@
 #ifdef __rtems__
 #include <rtems.h>
 #include <rtems/version.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #endif
 
 #include <errno.h>
@@ -172,6 +175,45 @@ static int os_rename (lua_State *L) {
   return luaL_fileresult(L, rename(fromname, toname) == 0, NULL);
 }
 
+#ifdef __rtems__
+
+static int os_chmod (lua_State *L) {
+  const char *fname = luaL_checkstring(L, 1);
+  lua_Integer mode = luaL_checkinteger(L, 2);
+  errno = 0;
+  return luaL_fileresult(L, chmod(fname, mode), fname);
+}
+
+static int os_chown (lua_State *L) {
+  const char* fname = luaL_checkstring(L, 1);
+  lua_Integer uid = luaL_checkinteger(L, 2);
+  lua_Integer gid = luaL_checkinteger(L, 3);
+  errno = 0;
+  return luaL_fileresult(L, chown(fname, uid, gid), fname);
+}
+
+static int os_mkdir (lua_State *L) {
+  const char* dname = luaL_checkstring(L, 1);
+  lua_Integer mode = luaL_checkinteger(L, 2);
+  errno = 0;
+  return luaL_fileresult(L, mkdir(dname, mode), dname);
+}
+
+static int os_truncate (lua_State *L) {
+  const char* fname = luaL_checkstring(L, 1);
+  lua_Integer size = luaL_checkinteger(L, 2);
+  errno = 0;
+  return luaL_fileresult(L, truncate(fname, size), fname);
+}
+
+static int os_creat (lua_State *L) {
+  const char* fname = luaL_checkstring(L, 1);
+  lua_Integer mode = luaL_checkinteger(L, 2);
+  errno = 0;
+  return luaL_fileresult(L, creat(fname, mode), fname);
+}
+
+#endif
 
 static int os_tmpname (lua_State *L) {
   char buff[LUA_TMPNAMBUFSIZE];
@@ -487,6 +529,11 @@ static const luaL_Reg syslib[] = {
   {"version",         os_rtems_version},
   {"make_version",    os_rtems_make_version},
   {"shutdown",        os_rtems_reset},
+  {"chown",           os_chown},
+  {"chmod",           os_chmod},
+  {"mkdir",           os_mkdir},
+  {"truncate",        os_truncate},
+  {"creat",           os_creat},
 #endif
   {NULL, NULL}
 };

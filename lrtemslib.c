@@ -9,6 +9,7 @@
 #include <bsp.h>
 #include <rtems/libi2c.h>
 #include <rtems/libio.h>
+#include <rtems/shell.h>
 
 #include <errno.h>
 #include <locale.h>
@@ -24,9 +25,9 @@
 
 static int lua_rtems_build_name(lua_State* L) {
   int a = luaL_checkinteger(L, 1);
-  int b = luaL_checkinteger(L, 1);
-  int c = luaL_checkinteger(L, 1);
-  int d = luaL_checkinteger(L, 1);
+  int b = luaL_checkinteger(L, 2);
+  int c = luaL_checkinteger(L, 3);
+  int d = luaL_checkinteger(L, 4);
   lua_pushinteger(L, rtems_build_name(a, b, c, d));
   return 1;
 }
@@ -65,6 +66,108 @@ static int lua_rtems_event_recv(lua_State* L) {
   }
   lua_pushinteger(L, out);
   return 1;
+}
+
+static int lua_rtems_shell_exec(lua_State* L) {
+  const char* cmd = luaL_checkstring(L, 1);
+  if (!cmd) return 0;
+
+  const char* args[33] = {0};
+  args[0] = cmd;
+
+  int i;
+  for (i = 2; i < 32; ++i) {
+    if (lua_type(L, i) == LUA_TNONE)
+      break;
+    args[i-1] = luaL_checkstring(L, i);
+  }
+
+  rtems_shell_cmd_t* pcmd = rtems_shell_lookup_cmd(cmd);
+  int r = pcmd ? pcmd->command(i-1, (char**)args) : -1;
+  lua_pushinteger(L, r);
+  return 1;
+}
+
+static int lua_rtems_shell_script(lua_State* L) {
+  const char* file = luaL_checkstring(L, 1);
+  if (!file) return 0;
+
+  const char* args[33] = {0};
+  args[0] = file;
+
+  int i;
+  for (i = 2; i < 32; ++i) {
+    if (lua_type(L, i) == LUA_TNONE)
+      break;
+    args[i-1] = luaL_checkstring(L, i);
+  }
+
+  int r = rtems_shell_script_file(i-1, (char**)args);
+  lua_pushinteger(L, r);
+  return 1;
+}
+
+/**
+ * rtems.wr8
+ * \param addr Starting address
+ * \param value 8-bit value to write
+ * \param num Number of elements to write
+ */
+static int lua_rtems_wr8(lua_State* L) {
+  lua_Integer addr = luaL_checkinteger(L, 1);
+  lua_Integer value = luaL_checkinteger(L, 2);
+  int isnum = 0;
+  lua_Integer num = lua_tointegerx(L, 3, &isnum);
+  if (!isnum)
+    num = 1;
+
+  uint8_t* p = (uint8_t*)(uintptr_t)addr;
+  for (int i = 0; i < num; ++i)
+    *(p++) = value & 0xFF;
+
+  return 0;
+}
+
+/**
+ * rtems.wr16
+ * \param addr Starting address
+ * \param value 16-bit value to write
+ * \param num Number of elements to write (NOT BYTES)
+ */
+static int lua_rtems_wr16(lua_State* L) {
+  lua_Integer addr = luaL_checkinteger(L, 1);
+  lua_Integer value = luaL_checkinteger(L, 2);
+  int isnum = 0;
+  lua_Integer num = lua_tointegerx(L, 3, &isnum);
+  if (!isnum)
+    num = 1;
+
+  uint16_t* p = (uint16_t*)(uintptr_t)addr;
+  for (int i = 0; i < num; ++i)
+    *(p++) = value & 0xFFFF;
+
+  return 0;
+}
+
+/**
+ * rtems.wr32
+ * \param addr Starting address
+ * \param value 32-bit value to write
+ * \param num Number of elements to write (NOT BYTES)
+ */
+static int lua_rtems_wr32(lua_State* L) {
+  lua_Integer addr = luaL_checkinteger(L, 1);
+  lua_Integer value = luaL_checkinteger(L, 2);
+  int isnum = 0;
+  lua_Integer num = lua_tointegerx(L, 3, &isnum);
+  if (!isnum)
+    num = 1;
+
+  uint32_t* p = (uint32_t*)(uintptr_t)addr;
+  for (int i = 0; i < num; ++i)
+    *(p++) = value & 0xFFFFFFFF;
+
+  return 0;
 }
 
 /***************** rtems_semaphore *****************/
@@ -245,6 +348,11 @@ static const luaL_Reg rtemslib[] = {
   {"event_recv",          lua_rtems_event_recv},
   {"create_semaphore",    lua_rtems_create_sem},
   {"create_message_queue", lua_rtems_mqueue_create},
+  {"shell",               lua_rtems_shell_exec},
+  {"shell_script",        lua_rtems_shell_script},
+  {"wr8",                 lua_rtems_wr8},
+  {"wr16",                lua_rtems_wr16},
+  {"wr32",                lua_rtems_wr32},
   {NULL, NULL}
 };
 
