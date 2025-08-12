@@ -38,6 +38,7 @@ static const luaL_Reg stdlibs[] = {
   {LUA_UTF8LIBNAME, luaopen_utf8},
 #ifdef __rtems__
   {LUA_RTEMSLIBNAME, luaopen_rtems},
+  {LUA_PCILIBNAME, luaopen_pci},
 #endif
   {NULL, NULL}
 };

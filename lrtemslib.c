@@ -10,6 +10,7 @@
 #include <rtems/libi2c.h>
 #include <rtems/libio.h>
 #include <rtems/shell.h>
+#include <rtems/pci.h>
 
 #include <errno.h>
 #include <locale.h>
@@ -170,6 +171,83 @@ static int lua_rtems_wr32(lua_State* L) {
   return 0;
 }
 
+
+static int lua_pci_write_byte(lua_State* L) {
+  int bus = luaL_checkinteger(L, 1);
+  int slot = luaL_checkinteger(L, 2);
+  int func = luaL_checkinteger(L, 3);
+  int addr = luaL_checkinteger(L, 4);
+  int val = luaL_checkinteger(L, 5);
+  int r = pci_write_config_byte(bus, slot, func, addr, val);
+  lua_pushboolean(L, r == 0);
+  return 1;
+}
+
+static int lua_pci_write_word(lua_State* L) {
+  int bus = luaL_checkinteger(L, 1);
+  int slot = luaL_checkinteger(L, 2);
+  int func = luaL_checkinteger(L, 3);
+  int addr = luaL_checkinteger(L, 4);
+  int val = luaL_checkinteger(L, 5);
+  int r = pci_write_config_word(bus, slot, func, addr, val);
+  lua_pushboolean(L, r == 0);
+  return 1;
+}
+
+static int lua_pci_write_dword(lua_State* L) {
+  int bus = luaL_checkinteger(L, 1);
+  int slot = luaL_checkinteger(L, 2);
+  int func = luaL_checkinteger(L, 3);
+  int addr = luaL_checkinteger(L, 4);
+  int val = luaL_checkinteger(L, 5);
+  int r = pci_write_config_dword(bus, slot, func, addr, val);
+  lua_pushboolean(L, r == 0);
+  return 1;
+}
+
+static int lua_pci_read_byte(lua_State* L) {
+  int bus = luaL_checkinteger(L, 1);
+  int slot = luaL_checkinteger(L, 2);
+  int func = luaL_checkinteger(L, 3);
+  int addr = luaL_checkinteger(L, 4);
+  
+  uint8_t val;
+  if (pci_read_config_byte(bus, slot, func, addr, &val) < 0)
+    lua_pushnil(L);
+  else
+    lua_pushinteger(L, val);
+  return 1;
+}
+
+static int lua_pci_read_word(lua_State* L) {
+  int bus = luaL_checkinteger(L, 1);
+  int slot = luaL_checkinteger(L, 2);
+  int func = luaL_checkinteger(L, 3);
+  int addr = luaL_checkinteger(L, 4);
+  
+  uint16_t val;
+  if (pci_read_config_word(bus, slot, func, addr, &val) < 0)
+    lua_pushnil(L);
+  else
+    lua_pushinteger(L, val);
+  return 1;
+}
+
+static int lua_pci_read_dword(lua_State* L) {
+  int bus = luaL_checkinteger(L, 1);
+  int slot = luaL_checkinteger(L, 2);
+  int func = luaL_checkinteger(L, 3);
+  int addr = luaL_checkinteger(L, 4);
+  
+  uint32_t val;
+  if (pci_read_config_dword(bus, slot, func, addr, &val) < 0)
+    lua_pushnil(L);
+  else
+    lua_pushinteger(L, val);
+  return 1;
+}
+
+
 /***************** rtems_semaphore *****************/
 
 static int lua_rtems_create_sem(lua_State* L) {
@@ -287,6 +365,11 @@ static const luaL_Reg message_queue_meta[] = {
   lua_setglobal(L, #_x); \
   } while(0)
 
+#define SET_GLOBAL_STRING(_x) do { \
+  lua_pushstring(L, _x); \
+  lua_setglobal(L, #_x); \
+  } while(0)
+  
 static void lua_rtems_register_globals(lua_State* L) {
   /* Misc globals */
   SET_GLOBAL_ENUM(RTEMS_LOCAL);
@@ -306,13 +389,13 @@ static void lua_rtems_register_globals(lua_State* L) {
   SET_GLOBAL_ENUM(RTEMS_SIMPLE_BINARY_SEMAPHORE);
   
   /* FS types */
-  SET_GLOBAL_ENUM(RTEMS_FILESYSTEM_TYPE_DOSFS);
-  SET_GLOBAL_ENUM(RTEMS_FILESYSTEM_TYPE_FTPFS);
-  SET_GLOBAL_ENUM(RTEMS_FILESYSTEM_TYPE_TFTPFS);
-  SET_GLOBAL_ENUM(RTEMS_FILESYSTEM_TYPE_IMFS);
-  SET_GLOBAL_ENUM(RTEMS_FILESYSTEM_TYPE_JFFS2);
-  SET_GLOBAL_ENUM(RTEMS_FILESYSTEM_TYPE_NFS);
-  SET_GLOBAL_ENUM(RTEMS_FILESYSTEM_TYPE_RFS);
+  SET_GLOBAL_STRING(RTEMS_FILESYSTEM_TYPE_DOSFS);
+  SET_GLOBAL_STRING(RTEMS_FILESYSTEM_TYPE_FTPFS);
+  SET_GLOBAL_STRING(RTEMS_FILESYSTEM_TYPE_TFTPFS);
+  SET_GLOBAL_STRING(RTEMS_FILESYSTEM_TYPE_IMFS);
+  SET_GLOBAL_STRING(RTEMS_FILESYSTEM_TYPE_JFFS2);
+  SET_GLOBAL_STRING(RTEMS_FILESYSTEM_TYPE_NFS);
+  SET_GLOBAL_STRING(RTEMS_FILESYSTEM_TYPE_RFS);
 
   /* Register event enums */
   for (uint32_t i = 0; i < 32; ++i) {
@@ -356,8 +439,24 @@ static const luaL_Reg rtemslib[] = {
   {NULL, NULL}
 };
 
+static const luaL_Reg pcilib[] = {
+  {"write_cfg_byte",          lua_pci_write_byte},
+  {"write_cfg_word",          lua_pci_write_word},
+  {"write_cfg_dword",         lua_pci_write_dword},
+  {"read_cfg_byte",           lua_pci_read_byte},
+  {"read_cfg_word",           lua_pci_read_word},
+  {"read_cfg_dword",          lua_pci_read_dword},
+  {NULL, NULL},
+};
+
 LUAMOD_API int luaopen_rtems(lua_State *L) {
   lua_rtems_init(L);
   luaL_newlib(L, rtemslib);
   return 1;
+}
+
+LUAMOD_API int luaopen_pci(lua_State* L) {
+  luaL_newlib(L, pcilib);
+  return 1;
+
 }

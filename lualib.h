@@ -58,6 +58,10 @@ LUAMOD_API int (luaopen_utf8) (lua_State *L);
 #define LUA_RTEMSLIBK (LUA_UTF8LIBK << 1)
 LUAMOD_API int (luaopen_rtems) (lua_State *L);
 
+#define LUA_PCILIBNAME "pci"
+#define LUA_PCILIBK (LUA_RTEMSLIBK << 1)
+LUAMOD_API int (luaopen_pci) (lua_State *L);
+
 /* open selected libraries */
 LUALIB_API void (luaL_openselectedlibs) (lua_State *L, int load, int preload);
 
