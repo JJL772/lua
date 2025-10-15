@@ -173,6 +173,7 @@ static int lua_rtems_wr32(lua_State* L) {
 
 
 static int lua_pci_write_byte(lua_State* L) {
+#ifdef HAVE_PCI
   int bus = luaL_checkinteger(L, 1);
   int slot = luaL_checkinteger(L, 2);
   int func = luaL_checkinteger(L, 3);
@@ -181,9 +182,14 @@ static int lua_pci_write_byte(lua_State* L) {
   int r = pci_write_config_byte(bus, slot, func, addr, val);
   lua_pushboolean(L, r == 0);
   return 1;
+#else
+  lua_pushboolean(L, 0);
+  return 1;
+#endif
 }
 
 static int lua_pci_write_word(lua_State* L) {
+#ifdef HAVE_PCI
   int bus = luaL_checkinteger(L, 1);
   int slot = luaL_checkinteger(L, 2);
   int func = luaL_checkinteger(L, 3);
@@ -191,10 +197,15 @@ static int lua_pci_write_word(lua_State* L) {
   int val = luaL_checkinteger(L, 5);
   int r = pci_write_config_word(bus, slot, func, addr, val);
   lua_pushboolean(L, r == 0);
+#else
+  lua_pushboolean(L, 0);
+  return 1;
+#endif
   return 1;
 }
 
 static int lua_pci_write_dword(lua_State* L) {
+#if HAVE_PCI
   int bus = luaL_checkinteger(L, 1);
   int slot = luaL_checkinteger(L, 2);
   int func = luaL_checkinteger(L, 3);
@@ -203,9 +214,14 @@ static int lua_pci_write_dword(lua_State* L) {
   int r = pci_write_config_dword(bus, slot, func, addr, val);
   lua_pushboolean(L, r == 0);
   return 1;
+#else
+  lua_pushboolean(L, 0);
+  return 1;
+#endif
 }
 
 static int lua_pci_read_byte(lua_State* L) {
+#ifdef HAVE_PCI
   int bus = luaL_checkinteger(L, 1);
   int slot = luaL_checkinteger(L, 2);
   int func = luaL_checkinteger(L, 3);
@@ -217,9 +233,14 @@ static int lua_pci_read_byte(lua_State* L) {
   else
     lua_pushinteger(L, val);
   return 1;
+#else
+  lua_pushnil(L);
+  return 1;
+#endif
 }
 
 static int lua_pci_read_word(lua_State* L) {
+#ifdef HAVE_PCI
   int bus = luaL_checkinteger(L, 1);
   int slot = luaL_checkinteger(L, 2);
   int func = luaL_checkinteger(L, 3);
@@ -231,9 +252,14 @@ static int lua_pci_read_word(lua_State* L) {
   else
     lua_pushinteger(L, val);
   return 1;
+#else
+  lua_pushnil(L);
+  return 1;
+#endif
 }
 
 static int lua_pci_read_dword(lua_State* L) {
+#ifdef HAVE_PCI
   int bus = luaL_checkinteger(L, 1);
   int slot = luaL_checkinteger(L, 2);
   int func = luaL_checkinteger(L, 3);
@@ -245,6 +271,10 @@ static int lua_pci_read_dword(lua_State* L) {
   else
     lua_pushinteger(L, val);
   return 1;
+#else
+  lua_pushnil(L);
+  return 1;
+#endif
 }
 
 
