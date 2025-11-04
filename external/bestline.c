@@ -161,15 +161,15 @@
 #define IUTF8 0
 #endif
 
+#ifdef __NEWLIB__
+#define getdelim __getdelim
+#endif
+
 __asm__(".ident\t\"\\n\\n\
 Bestline (BSD-2)\\n\
 Copyright 2018-2020 Justine Tunney <jtunney@gmail.com>\\n\
 Copyright 2010-2016 Salvatore Sanfilippo <antirez@gmail.com>\\n\
 Copyright 2010-2013 Pieter Noordhuis <pcnoordhuis@gmail.com>\"");
-
-#ifdef __rtems__
-#define getdelim __getdelim
-#endif
 
 #ifndef BESTLINE_MAX_RING
 #define BESTLINE_MAX_RING 8
@@ -1839,7 +1839,9 @@ static char *GetLineChar(int fin, int fout) {
     sigemptyset(&sa->sa_mask);
     sa->sa_flags = 0;
     sa->sa_handler = bestlineOnInt;
+#ifndef __rtems__
     sigaction(SIGINT, sa, sa + 1);
+#endif
     sigaction(SIGQUIT, sa, sa + 2);
     for (;;) {
         if (gotint) {
@@ -1895,7 +1897,9 @@ static char *GetLineChar(int fin, int fout) {
         }
     }
     sigaction(SIGQUIT, sa + 2, 0);
+#ifndef __rtems__
     sigaction(SIGINT, sa + 1, 0);
+#endif
     if (gotint) {
         abFree(&a);
         raise(gotint);
@@ -3434,7 +3438,9 @@ static ssize_t bestlineEdit(int stdin_fd, int stdout_fd, const char *prompt, con
             Case(Ctrl('?'), bestlineEditRubout(&l));
             Case(Ctrl('H'), bestlineEditRubout(&l));
             Case(Ctrl('L'), bestlineEditRefresh(&l));
+        #ifndef __rtems__
             Case(Ctrl('Z'), bestlineEditSuspend());
+        #endif
             Case(Ctrl('U'), bestlineEditKillLeft(&l));
             Case(Ctrl('T'), bestlineEditTranspose(&l));
             Case(Ctrl('K'), bestlineEditKillRight(&l));
@@ -3444,7 +3450,9 @@ static ssize_t bestlineEdit(int stdin_fd, int stdout_fd, const char *prompt, con
                 if (bestlineRead(l.ifd, seq, sizeof(seq), &l) != 1)
                     break;
                 switch (seq[0]) {
+                #ifndef __rtems__
                     Case(Ctrl('C'), bestlineEditInterrupt());
+                #endif
                     Case(Ctrl('B'), bestlineEditBarf(&l));
                     Case(Ctrl('S'), bestlineEditSlurp(&l));
                     Case(Ctrl('R'), bestlineEditRaise(&l));
@@ -3452,7 +3460,9 @@ static ssize_t bestlineEdit(int stdin_fd, int stdout_fd, const char *prompt, con
                     break;
                 }
             } else {
+            #ifndef __rtems__
                 bestlineEditInterrupt();
+            #endif
             }
             break;
         case Ctrl('X'):
@@ -3787,14 +3797,18 @@ char *bestlineRawInit(const char *prompt, const char *init, int infd, int outfd)
     sigemptyset(&sa->sa_mask);
     sa->sa_flags = 0;
     sa->sa_handler = bestlineOnInt;
+#ifndef __rtems__
     sigaction(SIGINT, sa, sa + 1);
+#endif
     sigaction(SIGQUIT, sa, sa + 2);
     bestlineWriteStr(outfd, "\033[?2004h"); // enable bracketed paste mode
     rc = bestlineEdit(infd, outfd, prompt, init, &buf);
     bestlineWriteStr(outfd, "\033[?2004l"); // disable bracketed paste mode
     bestlineDisableRawMode();
     sigaction(SIGQUIT, sa + 2, 0);
+#ifndef __rtems__
     sigaction(SIGINT, sa + 1, 0);
+#endif
     if (gotint) {
         free(buf);
         buf = 0;
@@ -4073,10 +4087,28 @@ static int MyWrite(int fd, const void *c, int n) {
 }
 
 static int MyPoll(int fd, int events, int to) {
+#ifdef HAVE_POLL
     struct pollfd p[1];
     p[0].fd = fd;
     p[0].events = events;
     return poll(p, 1, to);
+#else
+    fd_set fds;
+    FD_ZERO(&fds);
+    FD_SET(fd, &fds);
+
+    fd_set *rdfd = NULL, *wrfd = NULL, *errfd = NULL;
+    if (events & POLLIN)
+      rdfd = &fds;
+    if (events & POLLOUT)
+      wrfd = &fds;
+    if (events & POLLERR)
+      errfd = &fds;
+
+    struct timeval tv = {0, 0};
+    tv.tv_usec = to;
+    return select(1, rdfd, wrfd, errfd, &tv);
+#endif
 }
 
 void bestlineUserIO(int (*userReadFn)(int, void *, int), int (*userWriteFn)(int, const void *, int),
