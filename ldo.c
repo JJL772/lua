@@ -73,7 +73,7 @@
     try { (f)(L, ud); } catch(...) { if ((c)->status == 0) (c)->status = -1; }
 #define luai_jmpbuf		int  /* dummy field */
 
-#elif defined(LUA_USE_POSIX)				/* }{ */
+#elif defined(LUA_USE_POSIX) && !defined(__rtems__) /* }{ */
 
 /* in POSIX, try _longjmp/_setjmp (more efficient) */
 #define LUAI_THROW(L,c)		_longjmp((c)->b, 1)
