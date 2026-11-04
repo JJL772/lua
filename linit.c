@@ -39,6 +39,7 @@ static const luaL_Reg stdlibs[] = {
 #ifdef __rtems__
   {LUA_RTEMSLIBNAME, luaopen_rtems},
   {LUA_PCILIBNAME, luaopen_pci},
+  {LUA_TASKLIBNAME, luaopen_task},
 #endif
   {NULL, NULL}
 };

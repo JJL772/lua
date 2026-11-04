@@ -3,6 +3,8 @@
 #error This file should only be compiled on RTEMS
 #endif
 
+#include <unistd.h>
+
 #include "lprefix.h"
 
 #include <rtems.h>
@@ -11,6 +13,11 @@
 #include <rtems/libio.h>
 #include <rtems/shell.h>
 #include <rtems/pci.h>
+#include <rtems/malloc.h>
+#include <rtems/score/heap.h>
+#include <rtems/score/heapimpl.h>
+#include <rtems/score/protectedheap.h>
+#include <rtems/rtems/tasks.h>
 
 #include <errno.h>
 #include <locale.h>
@@ -23,6 +30,66 @@
 #include "lauxlib.h"
 #include "lualib.h"
 #include "llimits.h"
+#include "lrtemslib.h"
+
+int luaRT_init_alloc_state(luart_alloc_state_t* state, size_t size) {
+  state->heapSize = size;
+  if (posix_memalign(&state->heapptr, CPU_ALIGNMENT, size) != 0) {
+    return -1;
+  }
+  state->heapSize = _Protected_heap_Initialize(&state->heap, state->heapptr, size, CPU_ALIGNMENT);
+  if (state->heapSize == 0) {
+    free(state->heapptr);
+    return -1;
+  }
+  return 0;
+}
+
+void luaRT_free_alloc_state(luart_alloc_state_t* state) {
+  memset(&state->heap, 0, sizeof(state->heap));
+  free(state->heapptr);
+  state->heapSize = 0;
+}
+
+void* luaRT_alloc(void *ud, void *ptr, size_t osize, size_t nsize) {
+  luart_alloc_state_t* state = ud;
+  void* np = NULL;
+
+  if (ptr && nsize == 0) { /* free */
+    _Protected_heap_Free(&state->heap, ptr);
+    return NULL;
+  } else if (nsize > 0) { /* *alloc */
+    np = _Protected_heap_Allocate(&state->heap, nsize);
+  }
+
+  if (!np) {
+    return NULL;
+  }
+
+  /* this was a realloc call */
+  if (ptr != NULL) {
+    memcpy(np, ptr, nsize < osize ? nsize : osize);
+    _Protected_heap_Free(&state->heap, ptr);
+  }
+
+  return np;
+}
+
+size_t luaRT_heap_usage(luart_alloc_state_t* state) {
+  Heap_Information_block info;
+  if (!_Protected_heap_Get_information(&state->heap, &info)) {
+    return 0;
+  }
+  return info.Used.total;
+}
+
+size_t luaRT_heap_free(luart_alloc_state_t* state) {
+  Heap_Information_block info;
+  if (!_Protected_heap_Get_information(&state->heap, &info)) {
+    return 0;
+  }
+  return info.Free.total;
+}
 
 static int lua_rtems_build_name(lua_State* L) {
   int a = luaL_checkinteger(L, 1);
@@ -327,6 +394,50 @@ static const luaL_Reg sem_meta[] = {
   {NULL, NULL},
 };
 
+static int lua_rtems_get_cpu(lua_State* L) {
+  lua_pushinteger(L, rtems_scheduler_get_processor());
+  return 1;
+}
+
+static int lua_rtems_get_cpu_count(lua_State* L) {
+  lua_pushinteger(L, rtems_scheduler_get_processor_maximum());
+  return 1;
+}
+
+static int lua_rtems_get_heap_free(lua_State* L) {
+  Heap_Information_block bl;
+  if (!rtems_workspace_get_information(&bl)) {
+    luaL_error(L, "rtems_workspace_get_information failed");
+    return 0;
+  }
+  lua_pushinteger(L, bl.Free.total);
+  return 1;
+}
+
+static int lua_rtems_get_heap_used(lua_State* L) {
+  Heap_Information_block bl;
+  if (!rtems_workspace_get_information(&bl)) {
+    luaL_error(L, "rtems_workspace_get_information failed");
+    return 0;
+  }
+  lua_pushinteger(L, bl.Used.total);
+  return 1;
+}
+
+static int lua_task_usleep(lua_State* L) {
+  lua_Integer nsec = luaL_checkinteger(L, 1) * 1000ULL;
+  struct timespec tp = {
+    .tv_nsec = nsec % 1000000000ULL,
+    .tv_sec = nsec / 1000000000ULL
+  };
+  nanosleep(&tp, NULL);
+  return 0;
+}
+
+static int lua_task_yield(lua_State* L) {
+  rtems_task_wake_after(RTEMS_YIELD_PROCESSOR);
+  return 0;
+}
 
 /***************** rtems_message_queue *****************/
 
@@ -417,7 +528,7 @@ static void lua_rtems_register_globals(lua_State* L) {
   SET_GLOBAL_ENUM(RTEMS_INHERIT_PRIORITY);
   SET_GLOBAL_ENUM(RTEMS_NO_INHERIT_PRIORITY);
   SET_GLOBAL_ENUM(RTEMS_SIMPLE_BINARY_SEMAPHORE);
-  
+
   /* FS types */
   SET_GLOBAL_STRING(RTEMS_FILESYSTEM_TYPE_DOSFS);
   SET_GLOBAL_STRING(RTEMS_FILESYSTEM_TYPE_FTPFS);
@@ -466,6 +577,10 @@ static const luaL_Reg rtemslib[] = {
   {"wr8",                 lua_rtems_wr8},
   {"wr16",                lua_rtems_wr16},
   {"wr32",                lua_rtems_wr32},
+  {"get_processor",       lua_rtems_get_cpu},
+  {"get_processor_count", lua_rtems_get_cpu_count},
+  {"get_heap_free",       lua_rtems_get_heap_free},
+  {"get_heap_used",       lua_rtems_get_heap_used},
   {NULL, NULL}
 };
 
@@ -479,6 +594,12 @@ static const luaL_Reg pcilib[] = {
   {NULL, NULL},
 };
 
+static const luaL_Reg tasklib[] = {
+  {"yield",                   lua_task_yield},
+  {"usleep",                  lua_task_usleep},
+  {NULL, NULL},
+};
+
 LUAMOD_API int luaopen_rtems(lua_State *L) {
   lua_rtems_init(L);
   luaL_newlib(L, rtemslib);
@@ -488,5 +609,9 @@ LUAMOD_API int luaopen_rtems(lua_State *L) {
 LUAMOD_API int luaopen_pci(lua_State* L) {
   luaL_newlib(L, pcilib);
   return 1;
+}
 
+LUAMOD_API int luaopen_task(lua_State* L) {
+  luaL_newlib(L, tasklib);
+  return 1;
 }
